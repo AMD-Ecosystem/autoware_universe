@@ -132,19 +132,19 @@ __device__ void atomic_add_size_t(size_t * addr, size_t val)
   }
 }
 
-__device__ [[nodiscard]] inline bool meets_primary_threshold(
+[[nodiscard]] __device__ inline bool meets_primary_threshold(
   const size_t & count, const int & threshold)
 {
   return count >= static_cast<size_t>(threshold);
 }
 
-__device__ [[nodiscard]] inline bool meets_secondary_threshold(
+[[nodiscard]] __device__ inline bool meets_secondary_threshold(
   const size_t & count, const int & threshold)
 {
   return count <= static_cast<size_t>(threshold);
 }
 
-__device__ [[nodiscard]] inline bool meets_intensity_threshold(
+[[nodiscard]] __device__ inline bool meets_intensity_threshold(
   const uint8_t intensity, const uint8_t threshold)
 {
   return intensity <= threshold;
