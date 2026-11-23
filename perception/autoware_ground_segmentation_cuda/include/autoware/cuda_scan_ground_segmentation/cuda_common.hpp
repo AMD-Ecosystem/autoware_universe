@@ -32,7 +32,13 @@
 #endif
 
 #ifndef FULL_MASK
+#if defined(__HIP_PLATFORM_AMD__)
+// HIP masks are 64-bit and name lanes of the wavefront. A 64-wide wavefront holds two groups of
+// WARP_SIZE threads, so the mask names the lanes of the calling thread's group.
+#define FULL_MASK (0xFFFFFFFFull << (__lane_id() & ~(WARP_SIZE - 1)))
+#else
 #define FULL_MASK (0xFFFFFFFF)
+#endif
 #endif
 
 #endif  // AUTOWARE__CUDA_SCAN_GROUND_SEGMENTATION__CUDA_COMMON_HPP_

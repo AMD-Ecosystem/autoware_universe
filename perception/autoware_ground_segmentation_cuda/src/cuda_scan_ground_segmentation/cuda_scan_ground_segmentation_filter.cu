@@ -270,6 +270,18 @@ __forceinline__ __device__ void segmentBreakPoint(
              : ((dz < -global_height_threshold) ? PointType::OUT_OF_RANGE : PointType::GROUND);
 }
 
+// Ballot over the WARP_SIZE threads of the calling thread's group, bit i for its thread i
+__forceinline__ __device__ uint32_t warpBallot(int predicate)
+{
+#if defined(__HIP_PLATFORM_AMD__)
+  // A 64-wide wavefront holds two groups; keep the bits of the calling thread's group
+  return static_cast<uint32_t>(
+    __ballot_sync(FULL_MASK, predicate) >> (__lane_id() & ~(WARP_SIZE - 1)));
+#else
+  return __ballot_sync(FULL_MASK, predicate);
+#endif
+}
+
 __forceinline__ __device__ void segmentCell(
   const int wid,  // Index of the thread in the warp
   ClassifiedPointType * classified_points, const FilterParameters & param, Cell & cell,
@@ -335,18 +347,18 @@ __forceinline__ __device__ void segmentCell(
 
   // Use reduction to compute the cell's stat
   for (int offset = WARP_SIZE >> 1; offset > 0; offset >>= 1) {
-    t_gnd_height_sum += __shfl_down_sync(FULL_MASK, t_gnd_height_sum, offset);
-    t_gnd_radius_sum += __shfl_down_sync(FULL_MASK, t_gnd_radius_sum, offset);
-    t_gnd_point_num += __shfl_down_sync(FULL_MASK, t_gnd_point_num, offset);
+    t_gnd_height_sum += __shfl_down_sync(FULL_MASK, t_gnd_height_sum, offset, WARP_SIZE);
+    t_gnd_radius_sum += __shfl_down_sync(FULL_MASK, t_gnd_radius_sum, offset, WARP_SIZE);
+    t_gnd_point_num += __shfl_down_sync(FULL_MASK, t_gnd_point_num, offset, WARP_SIZE);
 
-    float other_height_min = __shfl_down_sync(FULL_MASK, t_gnd_height_min, offset);
+    float other_height_min = __shfl_down_sync(FULL_MASK, t_gnd_height_min, offset, WARP_SIZE);
     t_gnd_height_min = min(t_gnd_height_min, other_height_min);
   }
 
   // Now broadcast the min height and the number of ground points to all threads
-  float cell_gnd_height_min = __shfl_sync(FULL_MASK, t_gnd_height_min, 0);
-  int cell_gnd_point_num = __shfl_sync(FULL_MASK, t_gnd_point_num, 0);
-  float cell_gnd_radius_sum = __shfl_sync(FULL_MASK, t_gnd_radius_sum, 0);
+  float cell_gnd_height_min = __shfl_sync(FULL_MASK, t_gnd_height_min, 0, WARP_SIZE);
+  int cell_gnd_point_num = __shfl_sync(FULL_MASK, t_gnd_point_num, 0, WARP_SIZE);
+  float cell_gnd_radius_sum = __shfl_sync(FULL_MASK, t_gnd_radius_sum, 0, WARP_SIZE);
 
   if (
     param.use_recheck_ground_cluster && cell_gnd_point_num > 1 &&
@@ -372,8 +384,8 @@ __forceinline__ __device__ void segmentCell(
     __syncwarp();
 
     // Now use ballot sync to see if there are any ground points remaining
-    uint32_t recheck_res = __ballot_sync(FULL_MASK, local_gnd_point_num > minus_t_gnd_point_num);
-    uint32_t backup_res = __ballot_sync(FULL_MASK, local_gnd_point_num > 0);
+    uint32_t recheck_res = warpBallot(local_gnd_point_num > minus_t_gnd_point_num);
+    uint32_t backup_res = warpBallot(local_gnd_point_num > 0);
 
     // If no ground point remains, we have to keep the last ground point
     if (recheck_res == 0 && backup_res > 0) {
@@ -393,9 +405,12 @@ __forceinline__ __device__ void segmentCell(
 
     // Final update
     for (int offset = WARP_SIZE >> 1; offset > 0; offset >>= 1) {
-      minus_t_gnd_height_sum += __shfl_down_sync(FULL_MASK, minus_t_gnd_height_sum, offset);
-      minus_t_gnd_radius_sum += __shfl_down_sync(FULL_MASK, minus_t_gnd_radius_sum, offset);
-      minus_t_gnd_point_num += __shfl_down_sync(FULL_MASK, minus_t_gnd_point_num, offset);
+      minus_t_gnd_height_sum +=
+        __shfl_down_sync(FULL_MASK, minus_t_gnd_height_sum, offset, WARP_SIZE);
+      minus_t_gnd_radius_sum +=
+        __shfl_down_sync(FULL_MASK, minus_t_gnd_radius_sum, offset, WARP_SIZE);
+      minus_t_gnd_point_num +=
+        __shfl_down_sync(FULL_MASK, minus_t_gnd_point_num, offset, WARP_SIZE);
     }
 
     if (wid == 0) {
@@ -414,7 +429,7 @@ __forceinline__ __device__ void segmentCell(
   }
 
   __syncwarp();
-  cell.num_ground_points = __shfl_sync(FULL_MASK, cell.num_ground_points, 0);
+  cell.num_ground_points = __shfl_sync(FULL_MASK, cell.num_ground_points, 0, WARP_SIZE);
 }
 
 __global__ void sectorProcessingKernel(
@@ -522,9 +537,9 @@ __global__ void sectorProcessingKernel(
         // Now remove the cell at the end of the queue
         tail = (tail + 1) % param.gnd_cell_buffer_size;
         // Distribute the new slope to all threads in the warp
-        slope = __shfl_sync(FULL_MASK, slope, 0);
-        prev_gnd_radius_avg = __shfl_sync(FULL_MASK, cell.gnd_radius_avg, 0);
-        prev_gnd_height_avg = __shfl_sync(FULL_MASK, cell.gnd_height_avg, 0);
+        slope = __shfl_sync(FULL_MASK, slope, 0, WARP_SIZE);
+        prev_gnd_radius_avg = __shfl_sync(FULL_MASK, cell.gnd_radius_avg, 0, WARP_SIZE);
+        prev_gnd_height_avg = __shfl_sync(FULL_MASK, cell.gnd_height_avg, 0, WARP_SIZE);
         closest_gnd_cell_id = i;
       }
     }
