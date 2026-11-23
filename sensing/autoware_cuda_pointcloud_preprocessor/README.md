@@ -17,6 +17,17 @@ A detailed description of each filter's algorithm is available in the following 
 | cuda_voxel_grid_downsample_filter   | Implements voxel downsample filtering of the `autoware_pointcloud_preprocessor`'s CPU version                                                | [link](docs/cuda-voxel-grid-downsample.md)      |
 | cuda_polar_voxel_outlier_filter     | Implements polar voxel outlier filtering of the `autoware_pointcloud_preprocessor`'s CPU version                                             | [link](docs/cuda-polar-voxel-outlier-filter.md) |
 
+## AMD GPUs (ROCm)
+
+When CUDA is not found, the package builds with HIP on ROCm instead, with hipCUB for CUB, rocThrust for Thrust and libhipcxx for libcu++. The sources are unchanged: `hip/include` maps the CUB headers to hipCUB, and a header force-included on ROCm builds maps the CUDA runtime names to HIP. `autoware_cuda_utils` and `cuda_blackboard` must be built for ROCm as well.
+
+```bash
+colcon build --packages-up-to autoware_cuda_pointcloud_preprocessor \
+  --cmake-args -DCMAKE_PREFIX_PATH=/opt/rocm -DCMAKE_HIP_ARCHITECTURES=gfx942
+```
+
+Pass `-DAUTOWARE_CUDA_USE_HIP=ON` to build with HIP on a machine that also has CUDA. ROCm installed outside `/opt/rocm` needs its prefix in `CMAKE_PREFIX_PATH` or `ROCM_PATH`. `CMAKE_HIP_ARCHITECTURES` is the GPU target (`gfx942` for MI300, `gfx1100` for Radeon RX 7900); without it CMake builds for the GPUs it detects.
+
 ## (Optional) Future extensions / Unimplemented parts
 
 The subsample filters implemented in `autoware_pointcloud_preprocessor` will have similar counterparts in this package.

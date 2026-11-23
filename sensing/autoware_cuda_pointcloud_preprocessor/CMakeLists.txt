@@ -2,15 +2,31 @@ cmake_minimum_required(VERSION 3.14)
 project(autoware_cuda_pointcloud_preprocessor)
 
 find_package(ament_cmake_auto REQUIRED)
-find_package(CUDA)
+
+option(AUTOWARE_CUDA_USE_HIP "Build with HIP for AMD GPUs even if CUDA is found" OFF)
+if(NOT AUTOWARE_CUDA_USE_HIP)
+  find_package(CUDA)
+endif()
 
 if("$ENV{ENABLE_AGNOCAST}")
   find_package(agnocastlib)
 endif()
 
-if(NOT ${CUDA_FOUND})
-  message(WARNING "cuda was not found, so the autoware_cuda_pointcloud_preprocessor package will not be built.")
-  return()
+if(NOT CUDA_FOUND)
+  find_package(hip CONFIG QUIET PATHS $ENV{ROCM_PATH} /opt/rocm)
+  find_package(hipcub CONFIG QUIET PATHS $ENV{ROCM_PATH} /opt/rocm)
+  find_package(libhipcxx CONFIG QUIET PATHS $ENV{ROCM_PATH} /opt/rocm)
+  if(NOT hip_FOUND OR NOT hipcub_FOUND OR NOT libhipcxx_FOUND)
+    if(AUTOWARE_CUDA_USE_HIP)
+      message(FATAL_ERROR "AUTOWARE_CUDA_USE_HIP is ON, but HIP, hipCUB or libhipcxx is not found. "
+        "Add the ROCm prefix to CMAKE_PREFIX_PATH or set ROCM_PATH.")
+    endif()
+    message(WARNING "cuda was not found, so the autoware_cuda_pointcloud_preprocessor package will not be built.")
+    return()
+  endif()
+  message(STATUS "cuda was not found, building autoware_cuda_pointcloud_preprocessor with HIP ${hip_VERSION}")
+  enable_language(HIP)
+  set(USE_HIP TRUE)
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CUDA_FLAGS ${CMAKE_CUDA_FLAGS} "-g -G")
   set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-g -G")
@@ -43,11 +59,27 @@ if(BUILD_TESTING)
     ament_lint_auto_find_test_dependencies()
 endif()
 
-include_directories(
+if(USE_HIP)
+  # hip/include holds the CUB headers mapped to hipCUB and a header, force-included into every
+  # source, that maps the CUDA runtime names used here to HIP. All sources compile as HIP, so the
+  # headers that use libcu++ and Thrust types see the same definitions in every source.
+  get_target_property(hipcub_INCLUDE_DIRS hip::hipcub INTERFACE_INCLUDE_DIRECTORIES)
+  include_directories(
+    include
+    ${CMAKE_CURRENT_SOURCE_DIR}/hip/include
+    SYSTEM
+    ${hipcub_INCLUDE_DIRS}
+  )
+  add_compile_options(
+    "$<$<COMPILE_LANGUAGE:HIP>:-include;${CMAKE_CURRENT_SOURCE_DIR}/hip/include/cuda_pointcloud_preprocessor_hip_compat.hpp>"
+  )
+else()
+  include_directories(
     include
     SYSTEM
     ${CUDA_INCLUDE_DIRS}
-)
+  )
+endif()
 
 # cSpell: ignore expt
 list(APPEND CUDA_NVCC_FLAGS "--expt-relaxed-constexpr -diag-suppress 20012")
@@ -79,7 +111,7 @@ list(APPEND CUDA_NVCC_FLAGS "--extended-lambda")
 
 ################################################################################
 ### cuda_pointcloud_preprocessor ###
-cuda_add_library(cuda_pointcloud_preprocessor_lib SHARED
+set(cuda_pointcloud_preprocessor_lib_sources
   src/cuda_concatenate_data/cuda_combine_cloud_handler.cpp
   src/cuda_concatenate_data/cuda_combine_cloud_handler_kernel.cu
   src/cuda_pointcloud_preprocessor/cuda_pointcloud_preprocessor.cu
@@ -90,6 +122,29 @@ cuda_add_library(cuda_pointcloud_preprocessor_lib SHARED
   src/cuda_downsample_filter/cuda_voxel_grid_downsample_filter.cu
   src/cuda_outlier_filter/cuda_polar_voxel_outlier_filter.cu
 )
+set(cuda_pointcloud_preprocessor_sources
+  src/cuda_concatenate_data/cuda_concatenate_and_time_sync_node.cpp
+  src/cuda_pointcloud_preprocessor/cuda_pointcloud_preprocessor_node.cpp
+  src/cuda_downsample_filter/cuda_voxel_grid_downsample_filter_node.cpp
+  src/cuda_outlier_filter/cuda_polar_voxel_outlier_filter_node.cpp
+  src/cuda_outlier_filter/cuda_polar_voxel_noise_filter_node.cpp
+)
+
+if(USE_HIP)
+  set_source_files_properties(
+    ${cuda_pointcloud_preprocessor_lib_sources}
+    ${cuda_pointcloud_preprocessor_sources}
+    test/cuda_concatenate_data/test_cuda_combine_cloud_handler.cpp
+    test/test_cuda_pointcloud_preprocessor.cpp
+    PROPERTIES LANGUAGE HIP)
+  add_library(cuda_pointcloud_preprocessor_lib SHARED ${cuda_pointcloud_preprocessor_lib_sources})
+  target_link_libraries(cuda_pointcloud_preprocessor_lib
+    autoware_cuda_utils::autoware_cuda_utils
+    libhipcxx::libhipcxx
+  )
+else()
+  cuda_add_library(cuda_pointcloud_preprocessor_lib SHARED ${cuda_pointcloud_preprocessor_lib_sources})
+endif()
 
 target_link_libraries(cuda_pointcloud_preprocessor_lib
   ${autoware_pointcloud_preprocessor_TARGETS}
@@ -125,11 +180,7 @@ endif()
 
 # Targets
 ament_auto_add_library(cuda_pointcloud_preprocessor SHARED
-  src/cuda_concatenate_data/cuda_concatenate_and_time_sync_node.cpp
-  src/cuda_pointcloud_preprocessor/cuda_pointcloud_preprocessor_node.cpp
-  src/cuda_downsample_filter/cuda_voxel_grid_downsample_filter_node.cpp
-  src/cuda_outlier_filter/cuda_polar_voxel_outlier_filter_node.cpp
-  src/cuda_outlier_filter/cuda_polar_voxel_noise_filter_node.cpp
+  ${cuda_pointcloud_preprocessor_sources}
 )
 
 target_link_libraries(cuda_pointcloud_preprocessor
