@@ -4,12 +4,27 @@ project(autoware_probabilistic_occupancy_grid_map)
 find_package(autoware_cmake REQUIRED)
 autoware_package()
 
-find_package(CUDA)
+option(AUTOWARE_CUDA_USE_HIP "Build with HIP for AMD GPUs even if CUDA is found" OFF)
+if(NOT AUTOWARE_CUDA_USE_HIP)
+  find_package(CUDA)
+endif()
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 
-if(NOT ${CUDA_FOUND})
+if(NOT CUDA_FOUND)
+  find_package(hip CONFIG QUIET PATHS $ENV{ROCM_PATH} /opt/rocm)
+  if(hip_FOUND)
+    message(STATUS "cuda was not found, building ${PROJECT_NAME} with HIP ${hip_VERSION}")
+    enable_language(HIP)
+    set(USE_HIP TRUE)
+  elseif(AUTOWARE_CUDA_USE_HIP)
+    message(FATAL_ERROR "AUTOWARE_CUDA_USE_HIP is ON, but HIP is not found. "
+      "Add the ROCm prefix to CMAKE_PREFIX_PATH or set ROCM_PATH.")
+  endif()
+endif()
+
+if(NOT CUDA_FOUND AND NOT USE_HIP)
   message(WARNING "cuda was not found, so only autoware::occupancy_grid_map::LaserscanBasedOccupancyGridMapNode will be built.")
 else()
   add_definitions(-DUSE_CUDA)
@@ -22,7 +37,40 @@ include_directories(
     ${grid_map_ros_INCLUDE_DIRS}
 )
 
-if(${CUDA_FOUND})
+if(USE_HIP)
+  # A header force-included into every source maps the CUDA runtime names used here to HIP.
+  # All sources compile as HIP.
+  # HIP declares hipError_t [[nodiscard]]; some calls deliberately ignore it, as with CUDA.
+  add_compile_options(
+    "$<$<COMPILE_LANGUAGE:HIP>:-include;${CMAKE_CURRENT_SOURCE_DIR}/hip/include/probabilistic_occupancy_grid_map_hip_compat.hpp>"
+    $<$<COMPILE_LANGUAGE:HIP>:-Wno-error=unused-value>
+  )
+  file(GLOB_RECURSE ${PROJECT_NAME}_sources CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/*.cu
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+  )
+  set_source_files_properties(${${PROJECT_NAME}_sources} PROPERTIES LANGUAGE HIP)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+  add_library(${PROJECT_NAME}_cuda SHARED
+    lib/costmap_2d/occupancy_grid_map_fixed_kernel.cu
+    lib/costmap_2d/occupancy_grid_map_projective_kernel.cu
+    lib/updater/binary_bayes_filter_updater_kernel.cu
+    lib/updater/log_odds_bayes_filter_updater_kernel.cu
+    lib/utils/utils_kernel.cu
+  )
+  # The kernels call device functions defined in utils_kernel.cu, so device code is linked
+  # across sources.
+  list(TRANSFORM CMAKE_HIP_ARCHITECTURES PREPEND "--offload-arch=" OUTPUT_VARIABLE hip_offload_archs)
+  target_compile_options(${PROJECT_NAME}_cuda PRIVATE -fgpu-rdc)
+  # Warnings in the kernels are not errors, as with nvcc on CUDA.
+  set_target_properties(${PROJECT_NAME}_cuda PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
+  target_link_options(${PROJECT_NAME}_cuda PRIVATE -fgpu-rdc --hip-link ${hip_offload_archs})
+  target_link_libraries(${PROJECT_NAME}_cuda autoware_cuda_utils::autoware_cuda_utils)
+endif()
+
+if(CUDA_FOUND)
   include_directories(
     SYSTEM
       ${CUDA_INCLUDE_DIRS}
@@ -60,6 +108,9 @@ if(${CUDA_FOUND})
   target_link_libraries(${PROJECT_NAME}_cuda
     ${CUDA_LIBRARIES}
   )
+endif()
+
+if(CUDA_FOUND OR USE_HIP)
 
   ament_auto_add_library(${PROJECT_NAME}_common SHARED
     lib/costmap_2d/occupancy_grid_map_base.cpp
@@ -140,7 +191,7 @@ rclcpp_components_register_node(laserscan_based_occupancy_grid_map
 )
 
 
-if(${CUDA_FOUND})
+if(CUDA_FOUND OR USE_HIP)
   install(
     TARGETS ${PROJECT_NAME}_cuda
     DESTINATION lib

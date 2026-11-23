@@ -65,6 +65,17 @@ If you set `downsample_input_pointcloud` to `true`, the input pointcloud will be
 /perception/occupancy_grid_map/<sensor_name>/raw/downsample/pointcloud
 ```
 
+### AMD GPUs (ROCm)
+
+When CUDA is not found but HIP is, the GPU code builds with HIP on ROCm and every node is built, as with CUDA. A header force-included on ROCm builds maps the CUDA runtime names to HIP. `autoware_cuda_utils` must be built for ROCm as well.
+
+```bash
+colcon build --packages-up-to autoware_probabilistic_occupancy_grid_map \
+  --cmake-args -DCMAKE_PREFIX_PATH=/opt/rocm -DCMAKE_HIP_ARCHITECTURES=gfx942
+```
+
+Pass `-DAUTOWARE_CUDA_USE_HIP=ON` to build with HIP on a machine that also has CUDA. ROCm installed outside `/opt/rocm` needs its prefix in `CMAKE_PREFIX_PATH` or `ROCM_PATH`.
+
 ### Test
 
 This package provides unit tests using `gtest`.
