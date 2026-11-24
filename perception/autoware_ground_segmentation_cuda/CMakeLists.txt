@@ -22,6 +22,8 @@ if(NOT CUDA_FOUND)
   message(STATUS "cuda was not found, building autoware_ground_segmentation_cuda with HIP ${hip_VERSION}")
   enable_language(HIP)
   set(USE_HIP TRUE)
+  # find_package(CUDA) on a machine without CUDA leaves this pointing at a NOTFOUND result.
+  set(CUDA_LIBRARIES "")
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CUDA_FLAGS ${CMAKE_CUDA_FLAGS} "-g -G")
   set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-g -G")
