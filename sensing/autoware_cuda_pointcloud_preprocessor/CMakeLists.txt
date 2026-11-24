@@ -61,8 +61,8 @@ endif()
 
 if(USE_HIP)
   # hip/include holds the CUB headers mapped to hipCUB and a header, force-included into every
-  # source, that maps the CUDA runtime names used here to HIP. All sources compile as HIP, so the
-  # headers that use libcu++ and Thrust types see the same definitions in every source.
+  # source, that maps the CUDA runtime names used here to HIP. The sources that see libcu++ and
+  # Thrust types compile as HIP, so those headers get the same definitions in every source.
   get_target_property(hipcub_INCLUDE_DIRS hip::hipcub INTERFACE_INCLUDE_DIRECTORIES)
   include_directories(
     include
@@ -131,9 +131,15 @@ set(cuda_pointcloud_preprocessor_sources
 )
 
 if(USE_HIP)
+  # The concatenate node instantiates templates that call into g++-built libraries
+  # (managed_transform_buffer), and clang mangles some of those signatures differently, so it
+  # stays on the host compiler as it does with CUDA.
+  set(cuda_pointcloud_preprocessor_hip_node_sources ${cuda_pointcloud_preprocessor_sources})
+  list(REMOVE_ITEM cuda_pointcloud_preprocessor_hip_node_sources
+    src/cuda_concatenate_data/cuda_concatenate_and_time_sync_node.cpp)
   set_source_files_properties(
     ${cuda_pointcloud_preprocessor_lib_sources}
-    ${cuda_pointcloud_preprocessor_sources}
+    ${cuda_pointcloud_preprocessor_hip_node_sources}
     test/cuda_concatenate_data/test_cuda_combine_cloud_handler.cpp
     test/test_cuda_pointcloud_preprocessor.cpp
     PROPERTIES LANGUAGE HIP)
