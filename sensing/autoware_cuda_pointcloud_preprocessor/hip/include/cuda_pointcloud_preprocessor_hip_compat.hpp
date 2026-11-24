@@ -21,9 +21,6 @@
 #include <hip/hip_runtime.h>
 
 // Types
-#ifndef cudaError_t
-#define cudaError_t hipError_t
-#endif
 #ifndef cudaStream_t
 #define cudaStream_t hipStream_t
 #endif
@@ -35,12 +32,6 @@
 #endif
 
 // Constants
-#ifndef cudaSuccess
-#define cudaSuccess hipSuccess
-#endif
-#ifndef cudaErrorInvalidValue
-#define cudaErrorInvalidValue hipErrorInvalidValue
-#endif
 #ifndef cudaMemcpyHostToDevice
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
 #endif
@@ -67,12 +58,6 @@
 #endif
 
 // Errors and devices
-#ifndef cudaGetErrorName
-#define cudaGetErrorName hipGetErrorName
-#endif
-#ifndef cudaGetErrorString
-#define cudaGetErrorString hipGetErrorString
-#endif
 #ifndef cudaGetLastError
 #define cudaGetLastError hipGetLastError
 #endif

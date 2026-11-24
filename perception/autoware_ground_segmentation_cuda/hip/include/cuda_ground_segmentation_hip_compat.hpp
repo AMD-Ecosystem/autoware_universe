@@ -64,12 +64,6 @@
 #endif
 
 // Errors and devices
-#ifndef cudaGetErrorName
-#define cudaGetErrorName hipGetErrorName
-#endif
-#ifndef cudaGetErrorString
-#define cudaGetErrorString hipGetErrorString
-#endif
 #ifndef cudaGetLastError
 #define cudaGetLastError hipGetLastError
 #endif
