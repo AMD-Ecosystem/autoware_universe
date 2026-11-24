@@ -393,7 +393,7 @@ size_t CudaVoxelGridDownsampleFilter::searchValidVoxel(
 {
   // Update computation parameters on GPU constant memory
   CHECK_CUDA_ERROR(cudaMemcpyToSymbolAsync(
-    voxel_info_dev, &voxel_info_, sizeof(VoxelInfo), 0, cudaMemcpyDefault, stream_));
+    voxel_info_dev, &voxel_info_, sizeof(VoxelInfo), 0, cudaMemcpyHostToDevice, stream_));
 
   // calculate the number of voxel in each axis
   ThreeDim<size_t> num_voxels = {
