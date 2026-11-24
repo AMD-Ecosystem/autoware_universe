@@ -50,9 +50,6 @@
 #ifndef cudaMemcpyDeviceToDevice
 #define cudaMemcpyDeviceToDevice hipMemcpyDeviceToDevice
 #endif
-#ifndef cudaMemcpyDefault
-#define cudaMemcpyDefault hipMemcpyDefault
-#endif
 #ifndef cudaMemAllocationTypePinned
 #define cudaMemAllocationTypePinned hipMemAllocationTypePinned
 #endif
