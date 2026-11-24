@@ -275,6 +275,13 @@ if(BUILD_TESTING)
     ${autoware_point_types_INCLUDE_DIRS}
     ${cuda_blackboard_INCLUDE_DIRS}
   )
+  if(USE_HIP)
+    # Both tests link distortion_corrector_core, which calls fmt (through Sophus) without linking
+    # it. ld.lld, which links HIP executables, rejects that where GNU ld finds fmt indirectly.
+    find_package(fmt REQUIRED)
+    target_link_libraries(test_cuda_combine_cloud_handler fmt::fmt)
+    target_link_libraries(test_cuda_pointcloud_preprocessor fmt::fmt)
+  endif()
 endif()
 
 install(
