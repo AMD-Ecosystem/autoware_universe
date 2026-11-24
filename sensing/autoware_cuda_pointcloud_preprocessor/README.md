@@ -19,7 +19,7 @@ A detailed description of each filter's algorithm is available in the following 
 
 ## AMD GPUs (ROCm)
 
-When CUDA is not found, the package builds with HIP on ROCm instead, with hipCUB for CUB, rocThrust for Thrust and libhipcxx for libcu++. The sources are unchanged: `hip/include` maps the CUB headers to hipCUB, and a header force-included on ROCm builds maps the CUDA runtime names to HIP. `autoware_cuda_utils` and `cuda_blackboard` must be built for ROCm as well.
+When CUDA is not found, the package builds with HIP on ROCm instead, with hipCUB for CUB, rocThrust for Thrust and libhipcxx for libcu++. The sources need no HIP-specific code: `hip/include` maps the CUB headers to hipCUB, and a header force-included on ROCm builds maps the CUDA runtime names to HIP. `autoware_cuda_utils` and `cuda_blackboard` must be built for ROCm as well.
 
 ```bash
 colcon build --packages-up-to autoware_cuda_pointcloud_preprocessor \
