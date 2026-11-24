@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Force-included into every source of this package on ROCm builds: maps the CUDA runtime
+// Force-included into every HIP source of this package on ROCm builds: maps the CUDA runtime
 // names used here to HIP.
 
 #ifndef CUDA_POINTCLOUD_PREPROCESSOR_HIP_COMPAT_HPP_

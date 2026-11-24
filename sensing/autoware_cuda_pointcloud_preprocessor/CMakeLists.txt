@@ -61,8 +61,8 @@ endif()
 
 if(USE_HIP)
   # hip/include holds the CUB headers mapped to hipCUB and a header, force-included into every
-  # source, that maps the CUDA runtime names used here to HIP. The sources that see libcu++ and
-  # Thrust types compile as HIP, so those headers get the same definitions in every source.
+  # HIP source, that maps the CUDA runtime names used here to HIP. The sources that see libcu++
+  # and Thrust types compile as HIP, so those headers get the same definitions in every source.
   get_target_property(hipcub_INCLUDE_DIRS hip::hipcub INTERFACE_INCLUDE_DIRECTORIES)
   include_directories(
     include
